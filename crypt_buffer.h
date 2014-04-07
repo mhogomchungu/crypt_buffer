@@ -39,7 +39,7 @@ typedef struct{
 }result ;
 
 /*
- * This route takes a block of data encrypted by its encryption counter part and decrypt the block of data
+ * This routine takes a block of data encrypted by its encryption counter part and decrypt the block of data
  * The first argument is for internal use of the library and it is to be reused between decryption operations
  *
  * 1 is returned on success

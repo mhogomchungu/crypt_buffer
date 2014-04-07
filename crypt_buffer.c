@@ -48,8 +48,6 @@
 
 #define PBKDF2_ITERATIONS 5000
 
-typedef char * crypt_handle_t ;
-
 static int  _get_random_data( char * buffer,size_t buffer_size )
 {
 	int fd = open( "/dev/urandom",O_RDONLY ) ;
