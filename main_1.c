@@ -1,3 +1,5 @@
+
+
 /*
  * copyright: 2014
  * name : mhogo mchungu
@@ -27,42 +29,6 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
-#include <sys/types.h>
-
-/*
- * This data structure hold result of the operation.
- */
-typedef struct{
-	size_t length ;
-	void * buffer ;
-}result ;
-
-/*
- * This routine takes a block of data encrypted by its encryption counter part and decrypt the block of data
- * The first argument is for internal use of the library and it is to be reused between decryption operations
- *
- * 1 is returned on success
- * 0 is returned on error
- */
-
-int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-	     const void * password,size_t passphrase_size,result * r ) ;
-
-/*
- * This routine takes a block of data and encrypts it
- * The first argument is for internal use of the library and it is to be reused between encryption operations
- * 1 is returned on success
- * 0 is returned on error
- */
-
-int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-	     const void * password,size_t passphrase_size,result * r ) ;
-
-/*
- * example use case using a complete workable program is below
- */
-#if 0
 
 #include "crypt_buffer.h"
 #include <stdlib.h>
@@ -138,7 +104,7 @@ int decryptReceivedDataAndConsumeIt( const void * cipher_text_data,
 	}
 
 	free( h ) ;
-
+	
 	return e ;
 }
 
@@ -188,4 +154,3 @@ int main( int argc,char * argv[] )
 	free( _buffer ) ;
 	return 0 ;
 }
-#endif
