@@ -90,48 +90,60 @@ static gcry_error_t _create_key( const char * salt,size_t salt_size,const char *
 
 }
 
-static int _exit_create_gcrypt_handle( gcry_cipher_hd_t * handle,int r )
+static int _exit_create_gcrypt_handle( gcry_cipher_hd_t handle,int r )
 {
-	gcry_cipher_close( *handle ) ;
+	gcry_cipher_close( handle ) ;
 	return r ;
 }
 
-static int _create_gcrypt_handle( gcry_cipher_hd_t * handle,const char * password,
+static inline int _failed( gcry_error_t r )
+{
+	return r != GPG_ERR_NO_ERROR ;
+}
+
+static inline int _passed( gcry_error_t r )
+{
+	return r == GPG_ERR_NO_ERROR ;
+}
+
+static int _create_gcrypt_handle( gcry_cipher_hd_t * h,const char * password,
 				  size_t passphrase_size,const char * salt,size_t salt_size,const char * iv,size_t iv_size )
 {
 	char key[ KEY_LENGTH ] ;
 
 	gcry_error_t r ;
+	gcry_cipher_hd_t handle ;
 
 	if( gcry_control( GCRYCTL_INITIALIZATION_FINISHED_P ) != 0 ){
 		gcry_check_version( NULL ) ;
 		gcry_control( GCRYCTL_INITIALIZATION_FINISHED,0 ) ;
 	}
 
-	r = gcry_cipher_open( handle,GCRY_CIPHER_AES256,GCRY_CIPHER_MODE_CBC,0 ) ;
+	r = gcry_cipher_open( &handle,GCRY_CIPHER_AES256,GCRY_CIPHER_MODE_CBC,0 ) ;
 
-	if( r != GPG_ERR_NO_ERROR ){
+	if( _failed( r ) ){
 		return 0 ;
 	}
 
 	r = _create_key( salt,salt_size,password,passphrase_size,key,KEY_LENGTH ) ;
 
-	if( r != GPG_ERR_NO_ERROR ){
+	if( _failed( r ) ){
 		return _exit_create_gcrypt_handle( handle,0 ) ;
 	}
 
-	r = gcry_cipher_setkey( *handle,key,KEY_LENGTH ) ;
+	r = gcry_cipher_setkey( handle,key,KEY_LENGTH ) ;
 
-	if( r != GPG_ERR_NO_ERROR ){
+	if( _failed( r ) ){
 		return _exit_create_gcrypt_handle( handle,0 ) ;
 	}
 
-	r = gcry_cipher_setiv( *handle,iv,iv_size ) ;
+	r = gcry_cipher_setiv( handle,iv,iv_size ) ;
 
-	if( r == GPG_ERR_NO_ERROR ){
-		return 1 ;
+	if( _failed( r ) ){
+		return _exit_create_gcrypt_handle( handle,0 ) ;
 	}else{
-		return _exit_create_gcrypt_handle( handle,0 ) ;
+		*h = handle ;
+		return 1 ;
 	}
 }
 
@@ -201,7 +213,7 @@ int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 
 		gcry_cipher_close( handle ) ;
 
-		if( z == GPG_ERR_NO_ERROR ){
+		if( _passed( z ) ){
 			r->buffer = *h ;
 			/*
 			 * SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE will equal 64.
@@ -262,7 +274,7 @@ int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 
 		gcry_cipher_close( handle ) ;
 
-		if( z == GPG_ERR_NO_ERROR ){
+		if( _passed( z ) ){
 
 			if( _password_is_correct( e ) ){
 
