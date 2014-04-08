@@ -47,7 +47,7 @@ typedef struct{
  */
 
 int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-	     const char * password,size_t passphrase_size,result * r ) ;
+	     const void * password,size_t passphrase_size,result * r ) ;
 
 /*
  * This routine takes a block of data and encrypts it
@@ -57,7 +57,7 @@ int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
  */
 
 int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-		     const char * password,size_t passphrase_size,result * r ) ;
+	     const void * password,size_t passphrase_size,result * r ) ;
 
 /*
  * example use case

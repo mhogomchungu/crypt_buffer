@@ -48,6 +48,28 @@
 
 #define PBKDF2_ITERATIONS 5000
 
+/*
+ * This library takes a block of data and returns an encrypted version of the data.
+ * This library also has the ability to reverse the above action.
+ *
+ * A user gives a password of specified size and the library coverts it to a 32 byte key using
+ * pbkdf2 with iteration count of 5000 and a hash function of sha2.
+ *
+ * Data is encrypted using CBC mode of 256bit AES.
+ *
+ * The format of the encrypted data:
+ * First 16 bytes from offset 0 stores pbkdf2 salt.
+ * Second 16 bytes from offset 16 stores AES initialization vector.
+ * Third 4 bytes from offset 32 stores the size of the load given by the user.
+ * Fourth 4 bytes from offset 36 stores a string "TRUE" that is used to verify encryption key during decryption.
+ * 24 bytes from offset 40 are currently unsed.
+ * The load the user gave to be stored encrypted starts from offset 64.The load will be padded up to a multiple of 32.
+ *
+ * Encrypted data starts at offset 32.
+ *
+ * Encrypted data will take a minimum of 64 bytes and a maximum of 64 + load size + 31 bytes
+ */
+
 static int  _get_random_data( char * buffer,size_t buffer_size )
 {
 	int fd = open( "/dev/urandom",O_RDONLY ) ;
@@ -116,7 +138,7 @@ static int _create_gcrypt_handle( gcry_cipher_hd_t * handle,const char * passwor
 }
 
 int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-		     const char * password,size_t passphrase_size,result * r )
+	     const void * password,size_t passphrase_size,result * r )
 {
 	char buff[ SALT_SIZE + IV_SIZE ] ;
 
@@ -133,6 +155,9 @@ int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 	size_t k = buffer_size ;
 	_get_random_data( buff,SALT_SIZE + IV_SIZE ) ;
 
+	/*
+	 * make sure the block buffer we are going to encrypt is a multiple of 32
+	 */
 	while( k % 32 != 0 ){
 		k += 1 ;
 	}
@@ -149,17 +174,41 @@ int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 
 		len = SALT_SIZE + IV_SIZE ;
 
+		/*
+		 * The first 32 bytes block of cipher text starts at offset 0.
+		 * First 16 bytes is for pbkdf2 salt.
+		 * Second 16 bytes is for AES initialization vector.
+		 * These informations are stored in clear text but are indistinguishable from cipher text
+		 */
 		memcpy( e,buff,len ) ;
+		/*
+		 * The second 32 bytes block of cipher text starts at offset 32.
+		 * The first 4 bytes at offset 32 stores the size of the clear text we are going to encrypt
+		 */
 		memcpy( e + len,&buffer_size,sizeof( u_int32_t ) ) ;
+		/*
+		 * The second 4 bytes at offset 36 stores "TRUE" bytes to be used to verify decryption key
+		 * The remaining 24 bytes are currently unused.
+		 */
 		memcpy( e + len + sizeof( u_int32_t ),MAGIC_STRING,MAGIC_STRING_LENGTH ) ;
+		/*
+		 * The third block starts at offset 64 and it stores the data content we were asked to encrypt
+		 */
 		memcpy( e + len + LOAD_INFO_SIZE,buffer,buffer_size ) ;
 
+		/*
+		 * Encryption starts at offset 32
+		 */
 		z = gcry_cipher_encrypt( handle,e + len,LOAD_INFO_SIZE + k,NULL,0 ) ;
 
 		gcry_cipher_close( handle ) ;
 
 		if( z == GPG_ERR_NO_ERROR ){
 			r->buffer = *h ;
+			/*
+			 * SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE will equal 64.
+			 * k will equal the size of the data we were asked to encrypt rounded up to a multiple of 32
+			 */
 			r->length = k + SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ;
 			return 1 ;
 		}else{
@@ -170,6 +219,9 @@ int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 	}
 }
 
+/*
+ * The password is assumed to be correct if the 4 bytes from offset 36 equal "TRUE"
+ */
 static int _password_is_correct( const char * buffer )
 {
 	return memcmp( buffer + sizeof( u_int32_t ),MAGIC_STRING,MAGIC_STRING_LENGTH ) == 0 ;
@@ -183,7 +235,7 @@ static u_int32_t _get_data_length( const char * buffer )
 }
 
 int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-	     const char * password,size_t passphrase_size,result * r )
+	     const void * password,size_t passphrase_size,result * r )
 {
 	gcry_cipher_hd_t handle = 0 ;
 	gcry_error_t z ;
@@ -204,6 +256,10 @@ int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 
 	if( _create_gcrypt_handle( &handle,password,passphrase_size,salt,SALT_SIZE,iv,IV_SIZE ) ){
 
+		/*
+		 * Skip to offset 32 and start decryption from there.Thats because the first 32 bytes
+		 * holds salt and IV and are stored unencrypted.
+		 */
 		z = gcry_cipher_decrypt( handle,e,len,buff + SALT_SIZE + IV_SIZE,len ) ;
 
 		gcry_cipher_close( handle ) ;
