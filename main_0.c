@@ -34,20 +34,20 @@
 #include <string.h>
 #include <stdio.h>
 
-static int _status( char * e,char * f,int r )
+static int _status( crypt_buffer_ctx e,crypt_buffer_ctx f,int r )
 {
-	free( e ) ;
-	free( f ) ;
+	crypt_buffer_uninit( e ) ;
+	crypt_buffer_uninit( f ) ;
 	return r ;
 }
 
 int main( int argc,char * argv[] )
 {
-	char * encrypt_handle = NULL ;
-	char * decrypt_handle = NULL ;
+	crypt_buffer_ctx encrypt_handle = crypt_buffer_init() ;
+	crypt_buffer_ctx decrypt_handle = crypt_buffer_init() ;
 
-	result encrypt_result ;
-	result decrypt_result ;
+	crypt_buffer_result encrypt_result ;
+	crypt_buffer_result decrypt_result ;
 
 	/*
 	 * Below two variables hold information about clear text data
@@ -81,7 +81,7 @@ int main( int argc,char * argv[] )
 	/*
 	 * Encrypted a block of data using a given key
 	 */
-	if( encrypt( &encrypt_handle,data_to_encrypt,data_to_encrypt_length,password,password_length,&encrypt_result ) ){
+	if( crypt_buffer_encrypt( encrypt_handle,data_to_encrypt,data_to_encrypt_length,password,password_length,&encrypt_result ) ){
 		puts( "data encryption passed" ) ;
 		encrypted_data     = encrypt_result.buffer ;
 		encryped_data_size = encrypt_result.length ;
@@ -93,7 +93,7 @@ int main( int argc,char * argv[] )
 	/*
 	 * Given a block of cipher text,decrypt it using a given key
 	 */
-	if( decrypt( &decrypt_handle,encrypted_data,encryped_data_size,password,password_length,&decrypt_result ) ){
+	if( crypt_buffer_decrypt( decrypt_handle,encrypted_data,encryped_data_size,password,password_length,&decrypt_result ) ){
 		puts( "data decryption passed" ) ;
 		decrypted_data      = decrypt_result.buffer ;
 		decrypted_data_size = decrypt_result.length ;

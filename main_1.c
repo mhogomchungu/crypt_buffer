@@ -59,11 +59,11 @@ static void consumeDecryptedReceivedData( const void * buffer,size_t buffer_size
 
 int encryptAndSendData( const void * data,size_t data_size,const char * key,size_t key_size )
 {
-	char * h = NULL ;
+	crypt_buffer_ctx ctx = crypt_buffer_init() ;
 
-	result r ;
+	crypt_buffer_result r ;
 
-	int e = encrypt( &h,data,data_size,key,key_size,&r ) ;
+	int e = crypt_buffer_encrypt( ctx,data,data_size,key,key_size,&r ) ;
 
 	if( e == 1 ){
 		/*
@@ -76,18 +76,17 @@ int encryptAndSendData( const void * data,size_t data_size,const char * key,size
 		 */
 	}
 
-	free( h ) ;
+	crypt_buffer_uninit( ctx ) ;
 
 	return e ;
 }
 
-int decryptReceivedDataAndConsumeIt( const void * cipher_text_data,
+int decryptReceivedDataAndConsumeIt( void * cipher_text_data,
 				     size_t cipher_text_data_size,const char * key,size_t key_size )
 {
-	char * h = NULL ;
-	result r ;
+	crypt_buffer_result r ;
 
-	int e = decrypt( &h,cipher_text_data,cipher_text_data_size,key,key_size,&r ) ;
+	int e = crypt_buffer_decrypt_1( cipher_text_data,cipher_text_data_size,key,key_size,&r ) ;
 
 	if( e == 1 ){
 		/*
@@ -103,8 +102,6 @@ int decryptReceivedDataAndConsumeIt( const void * cipher_text_data,
 		 */
 	}
 
-	free( h ) ;
-	
 	return e ;
 }
 

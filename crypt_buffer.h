@@ -28,6 +28,10 @@
  * SUCH DAMAGE.
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <sys/types.h>
 
 /*
@@ -36,18 +40,19 @@
 typedef struct{
 	size_t length ;
 	void * buffer ;
-}result ;
+}crypt_buffer_result ;
+
+typedef struct crypt_buffer_ctx_1 * crypt_buffer_ctx ;
 
 /*
- * This routine takes a block of data encrypted by its encryption counter part and decrypt the block of data
- * The first argument is for internal use of the library and it is to be reused between decryption operations
- *
- * 1 is returned on success
- * 0 is returned on error
+ * create crypt buffer context object ;
  */
+crypt_buffer_ctx crypt_buffer_init() ;
 
-int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-	     const void * password,size_t passphrase_size,result * r ) ;
+/*
+ * destroy crypt_buffer context.
+ */
+void crypt_buffer_uninit( crypt_buffer_ctx ) ;
 
 /*
  * This routine takes a block of data and encrypts it
@@ -55,9 +60,29 @@ int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
  * 1 is returned on success
  * 0 is returned on error
  */
+int crypt_buffer_encrypt( crypt_buffer_ctx h,const void * buffer,u_int32_t buffer_size,
+			  const void * password,size_t passphrase_size,crypt_buffer_result * r ) ;
 
-int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-	     const void * password,size_t passphrase_size,result * r ) ;
+/*
+ * This routine takes a block of data encrypted by crypt_buffer_encrypt() decrypt it.
+ * The first argument is for internal use of the library and it is to be reused between decryption operations
+ *
+ * 1 is returned on success
+ * 0 is returned on error
+ */
+int crypt_buffer_decrypt( crypt_buffer_ctx h,const void * buffer,u_int32_t buffer_size,
+			  const void * password,size_t passphrase_size,crypt_buffer_result * r ) ;
+
+/*
+ * This routine takes a block of data encrypted by crypt_buffer_encrypt() decrypt it.
+ * This routine is a modified version of the above routine.It does not take a context and it reuses
+ * the first argument buffer and hence the content of the buffer is undefined when the function returns
+ *
+ * 1 is returned on success
+ * 0 is returned on error
+ */
+int crypt_buffer_decrypt_1( void * buffer,u_int32_t buffer_size,
+			    const void * password,size_t passphrase_size,crypt_buffer_result * r ) ;
 
 /*
  * example use case using a complete workable program is below
@@ -93,11 +118,11 @@ static void consumeDecryptedReceivedData( const void * buffer,size_t buffer_size
 
 int encryptAndSendData( const void * data,size_t data_size,const char * key,size_t key_size )
 {
-	char * h = NULL ;
+	crypt_buffer_ctx ctx = crypt_buffer_init() ;
 
-	result r ;
+	crypt_buffer_result r ;
 
-	int e = encrypt( &h,data,data_size,key,key_size,&r ) ;
+	int e = crypt_buffer_encrypt( ctx,data,data_size,key,key_size,&r ) ;
 
 	if( e == 1 ){
 		/*
@@ -110,18 +135,17 @@ int encryptAndSendData( const void * data,size_t data_size,const char * key,size
 		 */
 	}
 
-	free( h ) ;
+	crypt_buffer_uninit( ctx ) ;
 
 	return e ;
 }
 
-int decryptReceivedDataAndConsumeIt( const void * cipher_text_data,
+int decryptReceivedDataAndConsumeIt( void * cipher_text_data,
 				     size_t cipher_text_data_size,const char * key,size_t key_size )
 {
-	char * h = NULL ;
-	result r ;
+	crypt_buffer_result r ;
 
-	int e = decrypt( &h,cipher_text_data,cipher_text_data_size,key,key_size,&r ) ;
+	int e = crypt_buffer_decrypt_1( cipher_text_data,cipher_text_data_size,key,key_size,&r ) ;
 
 	if( e == 1 ){
 		/*
@@ -136,8 +160,6 @@ int decryptReceivedDataAndConsumeIt( const void * cipher_text_data,
 		 * decryption failed
 		 */
 	}
-
-	free( h ) ;
 
 	return e ;
 }
@@ -187,5 +209,10 @@ int main( int argc,char * argv[] )
 	 */
 	free( _buffer ) ;
 	return 0 ;
+}
+
+#endif
+
+#ifdef __cplusplus
 }
 #endif

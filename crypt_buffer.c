@@ -70,6 +70,24 @@
  * Encrypted data will take a minimum of 64 bytes and a maximum of 64 + load size + 31 bytes
  */
 
+struct crypt_buffer_ctx_1
+{
+	char * buffer ;
+};
+
+crypt_buffer_ctx crypt_buffer_init()
+{
+	crypt_buffer_ctx ctx = malloc( sizeof( struct crypt_buffer_ctx_1 ) ) ;
+	ctx->buffer = NULL ;
+	return ctx ;
+}
+
+void crypt_buffer_uninit( crypt_buffer_ctx ctx )
+{
+	free( ctx->buffer ) ;
+	free( ctx ) ;
+}
+
 static int  _get_random_data( char * buffer,size_t buffer_size )
 {
 	int fd = open( "/dev/urandom",O_RDONLY ) ;
@@ -147,8 +165,8 @@ static int _create_gcrypt_handle( gcry_cipher_hd_t * h,const char * password,
 	}
 }
 
-int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-	     const void * password,size_t passphrase_size,result * r )
+int crypt_buffer_encrypt( crypt_buffer_ctx h,const void * buffer,u_int32_t buffer_size,
+			  const void * password,size_t passphrase_size,crypt_buffer_result * r )
 {
 	char buff[ SALT_SIZE + IV_SIZE ] ;
 
@@ -172,12 +190,12 @@ int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 		k += 1 ;
 	}
 
-	e = realloc( *h,k + SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ;
+	e = realloc( h->buffer,k + SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ;
 
 	if( e == NULL ){
 		return 0 ;
 	}else{
-		*h = e ;
+		h->buffer = e ;
 	}
 
 	if( _create_gcrypt_handle( &handle,password,passphrase_size,salt,SALT_SIZE,iv,IV_SIZE ) ){
@@ -214,7 +232,7 @@ int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 		gcry_cipher_close( handle ) ;
 
 		if( _passed( z ) ){
-			r->buffer = *h ;
+			r->buffer = h->buffer ;
 			/*
 			 * SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE will equal 64.
 			 * k will equal the size of the data we were asked to encrypt rounded up to a multiple of 32
@@ -244,13 +262,13 @@ static u_int32_t _get_data_length( const char * buffer )
 	return l ;
 }
 
-int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
-	     const void * password,size_t passphrase_size,result * r )
+int crypt_buffer_decrypt( crypt_buffer_ctx h,const void * buffer,u_int32_t buffer_size,
+			  const void * password,size_t passphrase_size,crypt_buffer_result * r )
 {
 	gcry_cipher_hd_t handle = 0 ;
 	gcry_error_t z ;
 
-	char * e = realloc( *h,buffer_size ) ;
+	char * e = realloc( h->buffer,buffer_size ) ;
 
 	const char * buff = buffer ;
 	const char * salt = buff ;
@@ -261,7 +279,7 @@ int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 	if( e == NULL ){
 		return 0 ;
 	}else{
-		*h = e ;
+		h->buffer = e ;
 	}
 
 	if( _create_gcrypt_handle( &handle,password,passphrase_size,salt,SALT_SIZE,iv,IV_SIZE ) ){
@@ -280,6 +298,47 @@ int decrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 
 				r->buffer = e + LOAD_INFO_SIZE ;
 				r->length = _get_data_length( e ) ;
+
+				return 1 ;
+			}else{
+				return 0 ;
+			}
+		}else{
+			return 0 ;
+		}
+	}else{
+		return 0 ;
+	}
+}
+
+int crypt_buffer_decrypt_1( void * buffer,u_int32_t buffer_size,
+			    const void * password,size_t passphrase_size,crypt_buffer_result * r )
+{
+	gcry_cipher_hd_t handle = 0 ;
+	gcry_error_t z ;
+
+	char * buff = buffer ;
+	const char * salt = buff ;
+	const char * iv   = buff + SALT_SIZE ;
+
+	size_t len = buffer_size - ( SALT_SIZE + IV_SIZE ) ;
+
+	if( _create_gcrypt_handle( &handle,password,passphrase_size,salt,SALT_SIZE,iv,IV_SIZE ) ){
+
+		/*
+		 * Skip to offset 32 and start decryption from there.Thats because the first 32 bytes
+		 * holds salt and IV and are stored unencrypted.
+		 */
+		z = gcry_cipher_decrypt( handle,buff + SALT_SIZE + IV_SIZE,len,NULL,0 ) ;
+
+		gcry_cipher_close( handle ) ;
+
+		if( _passed( z ) ){
+
+			if( _password_is_correct( buff + SALT_SIZE + IV_SIZE ) ){
+
+				r->buffer = buff + SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ;
+				r->length = _get_data_length( buff + SALT_SIZE + IV_SIZE ) ;
 
 				return 1 ;
 			}else{
