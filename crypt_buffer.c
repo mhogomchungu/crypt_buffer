@@ -92,9 +92,7 @@ static gcry_error_t _create_key( const char * salt,size_t salt_size,const char *
 
 static int _exit_create_gcrypt_handle( gcry_cipher_hd_t * handle,int r )
 {
-	if( handle != 0 ){
-		gcry_cipher_close( *handle ) ;
-	}
+	gcry_cipher_close( *handle ) ;
 	return r ;
 }
 
@@ -113,7 +111,7 @@ static int _create_gcrypt_handle( gcry_cipher_hd_t * handle,const char * passwor
 	r = gcry_cipher_open( handle,GCRY_CIPHER_AES256,GCRY_CIPHER_MODE_CBC,0 ) ;
 
 	if( r != GPG_ERR_NO_ERROR ){
-		return _exit_create_gcrypt_handle( handle,0 ) ;
+		return 0 ;
 	}
 
 	r = _create_key( salt,salt_size,password,passphrase_size,key,KEY_LENGTH ) ;
