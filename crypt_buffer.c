@@ -73,12 +73,14 @@
 struct crypt_buffer_ctx_1
 {
 	char * buffer ;
-};
+	size_t buffer_size ;
+} ;
 
 crypt_buffer_ctx crypt_buffer_init()
 {
 	crypt_buffer_ctx ctx = malloc( sizeof( struct crypt_buffer_ctx_1 ) ) ;
-	ctx->buffer = NULL ;
+	ctx->buffer      = NULL ;
+	ctx->buffer_size = 0 ;
 	return ctx ;
 }
 
@@ -114,12 +116,12 @@ static int _exit_create_gcrypt_handle( gcry_cipher_hd_t handle,int r )
 	return r ;
 }
 
-static inline int _failed( gcry_error_t r )
+static int _failed( gcry_error_t r )
 {
 	return r != GPG_ERR_NO_ERROR ;
 }
 
-static inline int _passed( gcry_error_t r )
+static int _passed( gcry_error_t r )
 {
 	return r == GPG_ERR_NO_ERROR ;
 }
@@ -165,6 +167,26 @@ static int _create_gcrypt_handle( gcry_cipher_hd_t * h,const char * password,
 	}
 }
 
+static char * _expand_buffer( crypt_buffer_ctx h,size_t z )
+{
+	char * e = NULL ;
+
+	if( h->buffer_size < z ){
+
+		e = realloc( h->buffer,z ) ;
+
+		if( e != NULL ){
+			h->buffer = e ;
+			h->buffer_size = z ;
+			return e ;
+		}else{
+			return NULL ;
+		}
+	}else{
+		return h->buffer ;
+	}
+}
+
 int crypt_buffer_encrypt( crypt_buffer_ctx h,const void * buffer,u_int32_t buffer_size,
 			  const void * password,size_t passphrase_size,crypt_buffer_result * r )
 {
@@ -190,12 +212,10 @@ int crypt_buffer_encrypt( crypt_buffer_ctx h,const void * buffer,u_int32_t buffe
 		k += 1 ;
 	}
 
-	e = realloc( h->buffer,k + SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ;
+	e = _expand_buffer( h,k + SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ;
 
 	if( e == NULL ){
 		return 0 ;
-	}else{
-		h->buffer = e ;
 	}
 
 	if( _create_gcrypt_handle( &handle,password,passphrase_size,salt,SALT_SIZE,iv,IV_SIZE ) ){
@@ -268,7 +288,7 @@ int crypt_buffer_decrypt( crypt_buffer_ctx h,const void * buffer,u_int32_t buffe
 	gcry_cipher_hd_t handle = 0 ;
 	gcry_error_t z ;
 
-	char * e = realloc( h->buffer,buffer_size ) ;
+	char * e ;
 
 	const char * buff = buffer ;
 	const char * salt = buff ;
@@ -276,10 +296,10 @@ int crypt_buffer_decrypt( crypt_buffer_ctx h,const void * buffer,u_int32_t buffe
 
 	size_t len = buffer_size - ( SALT_SIZE + IV_SIZE ) ;
 
+	e = _expand_buffer( h,buffer_size ) ;
+
 	if( e == NULL ){
 		return 0 ;
-	}else{
-		h->buffer = e ;
 	}
 
 	if( _create_gcrypt_handle( &handle,password,passphrase_size,salt,SALT_SIZE,iv,IV_SIZE ) ){
