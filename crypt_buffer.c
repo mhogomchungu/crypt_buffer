@@ -142,15 +142,15 @@ int encrypt( char ** h,const void * buffer,u_int32_t buffer_size,
 
 	gcry_cipher_hd_t handle = 0 ;
 
-	char * e ;
-	size_t len ;
-
 	gcry_error_t z ;
 
+	size_t len ;
+	size_t k = buffer_size ;
+
+	char * e ;
 	const char * salt = buff ;
 	const char * iv   = buff + SALT_SIZE ;
 
-	size_t k = buffer_size ;
 	_get_random_data( buff,SALT_SIZE + IV_SIZE ) ;
 
 	/*
