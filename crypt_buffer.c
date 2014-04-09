@@ -187,7 +187,7 @@ static char * _expand_buffer( crypt_buffer_ctx h,size_t z )
 	if( h == NULL ){
 		return 0 ;
 	}
-	
+
 	if( h->buffer_size < z ){
 
 		e = realloc( h->buffer,z ) ;
@@ -328,13 +328,15 @@ int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 
 			if( _password_is_correct( e ) ){
 
-				r->buffer = e + LOAD_INFO_SIZE ;
-				r->length = _get_data_length( e ) ;
+				len = _get_data_length( e ) ;
 
-				if( r->length <= buffer_size - ( SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ){
+				if( len <= buffer_size - ( SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ){
 					/*
 					 * make sure the stored size is within expected range
 					 */
+					r->buffer = e + LOAD_INFO_SIZE ;
+					r->length = len ;
+
 					return 1 ;
 				}else{
 					/*
