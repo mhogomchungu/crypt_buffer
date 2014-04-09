@@ -75,10 +75,6 @@ static void encryptAndSendData( const void * data,size_t data_size,const char * 
 			* encryption succeeded,simulate sending encrypted data somewhere
 			*/
 			sendData( r.buffer,r.length ) ;
-		}else{
-			/*
-			* encrypted failed
-			*/
 		}
 
 		crypt_buffer_uninit( &ctx ) ;
