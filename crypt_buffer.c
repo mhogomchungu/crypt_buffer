@@ -187,6 +187,7 @@ static char * _expand_buffer( crypt_buffer_ctx h,size_t z )
 	if( h == NULL ){
 		return 0 ;
 	}
+	
 	if( h->buffer_size < z ){
 
 		e = realloc( h->buffer,z ) ;
@@ -299,7 +300,6 @@ static u_int32_t _get_data_length( const char * buffer )
 int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,
 			  const void * password,size_t passphrase_size,crypt_buffer_result * r )
 {
-	gcry_cipher_hd_t handle = 0 ;
 	gcry_error_t z ;
 
 	char * e ;
@@ -323,8 +323,6 @@ int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 		 * holds salt and IV and are stored unencrypted.
 		 */
 		z = gcry_cipher_decrypt( ctx->h,e,len,buff + SALT_SIZE + IV_SIZE,len ) ;
-
-		gcry_cipher_close( handle ) ;
 
 		if( _passed( z ) ){
 
