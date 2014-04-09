@@ -53,67 +53,67 @@ static void receiveEncryptedDataFromSomeWhere( void ** buffer,size_t * buffer_si
 
 static void consumeDecryptedReceivedData( const void * buffer,size_t buffer_size )
 {
-	puts( buffer ) ;
-	if( buffer_size ){;}
+	const char * x = buffer ;
+	size_t i ;
+	char e ;
+	for( i = 0 ; i < buffer_size ; i++ ){
+		e = *( x + i ) ;
+		printf( "%c",e ) ;
+	}
+	printf( "\n" ) ;
 }
 
-int encryptAndSendData( const void * data,size_t data_size,const char * key,size_t key_size )
+static void encryptAndSendData( const void * data,size_t data_size,const char * key,size_t key_size )
 {
-	crypt_buffer_ctx ctx = crypt_buffer_init() ;
-
+	crypt_buffer_ctx ctx ;
 	crypt_buffer_result r ;
 
-	int e = crypt_buffer_encrypt( ctx,data,data_size,key,key_size,&r ) ;
+	if( crypt_buffer_init( &ctx ) ){
 
-	if( e == 1 ){
-		/*
-		 * encryption succeeded,simulate sending encrypted data somewhere
-		 */
-		sendData( r.buffer,r.length ) ;
-	}else{
-		/*
-		 * encrypted failed
-		 */
+		if( crypt_buffer_encrypt( ctx,data,data_size,key,key_size,&r ) ){
+			/*
+			* encryption succeeded,simulate sending encrypted data somewhere
+			*/
+			sendData( r.buffer,r.length ) ;
+		}else{
+			/*
+			* encrypted failed
+			*/
+		}
+
+		crypt_buffer_uninit( &ctx ) ;
 	}
-
-	crypt_buffer_uninit( ctx ) ;
-
-	return e ;
 }
 
-int decryptReceivedDataAndConsumeIt( void * cipher_text_data,
-				     size_t cipher_text_data_size,const char * key,size_t key_size )
+void decryptReceivedDataAndConsumeIt( const void * cipher_text_data,
+				      size_t cipher_text_data_size,const char * key,size_t key_size )
 {
+	crypt_buffer_ctx ctx ;
 	crypt_buffer_result r ;
 
-	int e = crypt_buffer_decrypt_1( cipher_text_data,cipher_text_data_size,key,key_size,&r ) ;
+	if( crypt_buffer_init( &ctx ) ){
 
-	if( e == 1 ){
-		/*
-		 * decryption succeeded,
-		 */
-		/*
-		 * This function simulates using of now decrypted data
-		 */
-		consumeDecryptedReceivedData( r.buffer,r.length ) ;
-	}else{
-		/*
-		 * decryption failed
-		 */
+		if( crypt_buffer_decrypt( ctx,cipher_text_data,cipher_text_data_size,key,key_size,&r ) ){
+			/*
+			 * decryption succeeded,
+			 */
+			/*
+			 * This function simulates using of now decrypted data
+			 */
+			consumeDecryptedReceivedData( r.buffer,r.length ) ;
+		}
+
+		crypt_buffer_uninit( &ctx ) ;
 	}
-
-	return e ;
 }
 
 int main( int argc,char * argv[] )
 {
 	/*
 	 * data to be encrypted before sending it somewhere.
-	 * We add +1 to data size to also carry the NULL
-	 * character so that puts() could print nicely in consumeDecryptedReceivedData()
 	 */
-	const char * data = "abcd" ;
-	size_t data_size  = strlen( data ) + 1 ;
+	const char * data = "works as expected" ;
+	size_t data_size  = strlen( data ) ;
 
 	/*
 	 * key to be used for encrypted and decryption

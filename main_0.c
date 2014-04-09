@@ -34,17 +34,15 @@
 #include <string.h>
 #include <stdio.h>
 
-static int _status( crypt_buffer_ctx e,crypt_buffer_ctx f,int r )
+static int _status( crypt_buffer_ctx e,int r )
 {
-	crypt_buffer_uninit( e ) ;
-	crypt_buffer_uninit( f ) ;
+	crypt_buffer_uninit( &e ) ;
 	return r ;
 }
 
 int main( int argc,char * argv[] )
 {
-	crypt_buffer_ctx encrypt_handle = crypt_buffer_init() ;
-	crypt_buffer_ctx decrypt_handle = crypt_buffer_init() ;
+	crypt_buffer_ctx ctx ;
 
 	crypt_buffer_result encrypt_result ;
 	crypt_buffer_result decrypt_result ;
@@ -78,45 +76,49 @@ int main( int argc,char * argv[] )
 	 */
 	if( argc && argv ){;}
 
+	if( crypt_buffer_init( &ctx ) == 0 ){
+		puts( "failed to initialize context" ) ;
+		return _status( ctx,1 ) ;
+	}
+
 	/*
 	 * Encrypted a block of data using a given key
 	 */
-	if( crypt_buffer_encrypt( encrypt_handle,data_to_encrypt,data_to_encrypt_length,password,password_length,&encrypt_result ) ){
+	if( crypt_buffer_encrypt( ctx,data_to_encrypt,data_to_encrypt_length,password,password_length,&encrypt_result ) ){
 		puts( "data encryption passed" ) ;
 		encrypted_data     = encrypt_result.buffer ;
 		encryped_data_size = encrypt_result.length ;
 	}else{
 		puts( "data encryption failed" ) ;
-		return _status( encrypt_handle,decrypt_handle,1 ) ;
+		return _status( ctx,1 ) ;
 	}
 
 	/*
 	 * Given a block of cipher text,decrypt it using a given key
 	 */
-	if( crypt_buffer_decrypt( decrypt_handle,encrypted_data,encryped_data_size,password,password_length,&decrypt_result ) ){
+	if( crypt_buffer_decrypt( ctx,encrypted_data,encryped_data_size,password,password_length,&decrypt_result ) ){
 		puts( "data decryption passed" ) ;
 		decrypted_data      = decrypt_result.buffer ;
 		decrypted_data_size = decrypt_result.length ;
 	}else{
 		puts( "data decryption failed" ) ;
-		return _status( encrypt_handle,decrypt_handle,1 ) ;
+		return _status( ctx,1 ) ;
 	}
 
 	/*
 	 * Here,we compare our original clear text and the clear text derived from cipher text to
 	 * see if the conversion was successful or not
 	 */
-
 	if( strcmp( data_to_encrypt,decrypted_data ) == 0 ){
 		if( data_to_encrypt_length == decrypted_data_size ){
 			puts( "conversion successful" ) ;
-			return _status( encrypt_handle,decrypt_handle,0 ) ;
+			return _status( ctx,0 ) ;
 		}else{
 			puts( "conversion 1 failed" ) ;
-			return _status( encrypt_handle,decrypt_handle,1 ) ;
+			return _status( ctx,1 ) ;
 		}
 	}else{
 		puts( "conversion 2 failed" ) ;
-		return _status( encrypt_handle,decrypt_handle,1 ) ;
+		return _status( ctx,1 ) ;
 	}
 }
