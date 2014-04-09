@@ -115,7 +115,7 @@ int crypt_buffer_init( crypt_buffer_ctx * ctx )
 			ctx_1->buffer      = NULL ;
 			ctx_1->buffer_size = 0 ;
 			ctx_1->h           = handle ;
-			*ctx = ctx_1 ;
+			*ctx               = ctx_1 ;
 			return 1 ;
 		}
 	}
@@ -333,7 +333,17 @@ int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 				r->buffer = e + LOAD_INFO_SIZE ;
 				r->length = _get_data_length( e ) ;
 
-				return 1 ;
+				if( r->length <= buffer_size - ( SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ){
+					/*
+					 * make sure the stored size is within expected range
+					 */
+					return 1 ;
+				}else{
+					/*
+					 * something funny is going on,the stored size of data is larger than data itself
+					 */
+					return 0 ;
+				}
 			}else{
 				return 0 ;
 			}
