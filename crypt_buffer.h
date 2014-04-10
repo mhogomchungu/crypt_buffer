@@ -38,45 +38,46 @@ extern "C" {
  * This data structure hold result of the operation.
  */
 typedef struct{
-	size_t length ;
 	void * buffer ;
+	size_t length ;
 }crypt_buffer_result ;
 
 typedef struct crypt_buffer_ctx_1 * crypt_buffer_ctx ;
 
 /*
- * create crypt buffer context object ;
- * 1 is returned on success
- * 0 is returned on error
+ * create crypt buffer_context object.
+ * The same context object can be used for both encryption and decryption.
+ * 1 is returned on success.
+ * 0 is returned on error.
  */
 int crypt_buffer_init( crypt_buffer_ctx * ctx ) ;
 
 /*
- * destroy crypt_buffer context.
+ * destroy crypt_buffer context object when done with it.
  */
-void crypt_buffer_uninit( crypt_buffer_ctx * ) ;
+void crypt_buffer_uninit( crypt_buffer_ctx * ctx ) ;
 
 /*
  * This routine takes a block of data and encrypts it
- * The first argument is for internal use of the library and it is to be reused between encryption operations
- * 1 is returned on success
- * 0 is returned on error
+ * The first argument is for internal use of the library and it is to be reused between encryption/decryption operations.
+ * 1 is returned on success.
+ * 0 is returned on error.
  */
 int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,
 			  const void * password,size_t passphrase_size,crypt_buffer_result * r ) ;
 
 /*
  * This routine takes a block of data encrypted by crypt_buffer_encrypt() decrypt it.
- * The first argument is for internal use of the library and it is to be reused between decryption operations
+ * The first argument is for internal use of the library and it is to be reused between encryption/decryption operations.
  *
- * 1 is returned on success
- * 0 is returned on error
+ * 1 is returned on success.
+ * 0 is returned on error.
  */
 int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,
 			  const void * password,size_t passphrase_size,crypt_buffer_result * r ) ;
 
 /*
- * example use case using a complete workable program is below
+ * example use case using a complete workable program is below.
  */
 #if 0
 
