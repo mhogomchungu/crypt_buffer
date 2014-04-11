@@ -50,7 +50,7 @@ typedef struct crypt_buffer_ctx_1 * crypt_buffer_ctx ;
  * 1 is returned on success.
  * 0 is returned on error.
  */
-int crypt_buffer_init( crypt_buffer_ctx * ctx ) ;
+int crypt_buffer_init( crypt_buffer_ctx * ctx,const void * password,size_t passphrase_size ) ;
 
 /*
  * destroy crypt_buffer context object when done with it.
@@ -63,8 +63,7 @@ void crypt_buffer_uninit( crypt_buffer_ctx * ctx ) ;
  * 1 is returned on success.
  * 0 is returned on error.
  */
-int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,
-			  const void * password,size_t passphrase_size,crypt_buffer_result * r ) ;
+int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,crypt_buffer_result * r ) ;
 
 /*
  * This routine takes a block of data encrypted by crypt_buffer_encrypt() decrypt it.
@@ -73,8 +72,7 @@ int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
  * 1 is returned on success.
  * 0 is returned on error.
  */
-int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,
-			  const void * password,size_t passphrase_size,crypt_buffer_result * r ) ;
+int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,crypt_buffer_result * r ) ;
 
 /*
  * example use case using a complete workable program is below.
@@ -114,43 +112,30 @@ static void consumeDecryptedReceivedData( const void * buffer,size_t buffer_size
 	printf( "\n" ) ;
 }
 
-static void encryptAndSendData( const void * data,size_t data_size,const char * key,size_t key_size )
+static void encryptAndSendData( crypt_buffer_ctx ctx,const void * data,size_t data_size )
 {
-	crypt_buffer_ctx ctx ;
 	crypt_buffer_result r ;
 
-	if( crypt_buffer_init( &ctx ) ){
-
-		if( crypt_buffer_encrypt( ctx,data,data_size,key,key_size,&r ) ){
-			/*
-			* encryption succeeded,simulate sending encrypted data somewhere
-			*/
-			sendData( r.buffer,r.length ) ;
-		}
-
-		crypt_buffer_uninit( &ctx ) ;
+	if( crypt_buffer_encrypt( ctx,data,data_size,&r ) ){
+		/*
+		* encryption succeeded,simulate sending encrypted data somewhere
+		*/
+		sendData( r.buffer,r.length ) ;
 	}
 }
 
-void decryptReceivedDataAndConsumeIt( const void * cipher_text_data,
-				      size_t cipher_text_data_size,const char * key,size_t key_size )
+void decryptReceivedDataAndConsumeIt( crypt_buffer_ctx ctx,const void * cipher_text_data,size_t cipher_text_data_size )
 {
-	crypt_buffer_ctx ctx ;
 	crypt_buffer_result r ;
 
-	if( crypt_buffer_init( &ctx ) ){
-
-		if( crypt_buffer_decrypt( ctx,cipher_text_data,cipher_text_data_size,key,key_size,&r ) ){
-			/*
-			 * decryption succeeded,
-			 */
-			/*
-			 * This function simulates using of now decrypted data
-			 */
-			consumeDecryptedReceivedData( r.buffer,r.length ) ;
-		}
-
-		crypt_buffer_uninit( &ctx ) ;
+	if( crypt_buffer_decrypt( ctx,cipher_text_data,cipher_text_data_size,&r ) ){
+		/*
+		 * decryption succeeded,
+		 */
+		/*
+		 * This function simulates using of now decrypted data
+		 */
+		consumeDecryptedReceivedData( r.buffer,r.length ) ;
 	}
 }
 
@@ -171,32 +156,42 @@ int main( int argc,char * argv[] )
 	void * cipher_buffer ;
 	size_t cipher_buffer_size ;
 
+	crypt_buffer_ctx ctx ;
+
 	/*
 	 * we dont need these two arguments
 	 */
 	if( argc && argv ){;}
 
-	/*
-	 * This function simulates encrypting data and sending it somewhere
-	 */
-	encryptAndSendData( data,data_size,key,key_size ) ;
+	_buffer = NULL ;
 
-	/*
-	 * This function simulates receiving encrypted data.
-	 */
-	receiveEncryptedDataFromSomeWhere( &cipher_buffer,&cipher_buffer_size ) ;
+	if( crypt_buffer_init( &ctx,key,key_size ) ){
+		/*
+		 * This function simulates encrypting data and sending it somewhere
+		 */
+		encryptAndSendData( ctx,data,data_size ) ;
 
-	/*
-	 * This function simulates data decryption received from somewhere.
-	 */
-	decryptReceivedDataAndConsumeIt( cipher_buffer,cipher_buffer_size,key,key_size ) ;
+		/*
+		 * This function simulates receiving encrypted data.
+		 */
+		receiveEncryptedDataFromSomeWhere( &cipher_buffer,&cipher_buffer_size ) ;
 
-	/*
-	 * clean up after simulation ;
-	 *
-	 */
-	free( _buffer ) ;
-	return 0 ;
+		/*
+		 * This function simulates data decryption received from somewhere.
+		 * Notice the same context is used for encryption and decryption
+		 */
+		decryptReceivedDataAndConsumeIt( ctx,cipher_buffer,cipher_buffer_size ) ;
+
+		crypt_buffer_uninit( &ctx ) ;
+
+		/*
+		 * clean up after simulation ;
+		 */
+		free( _buffer ) ;
+		return 0 ;
+	}else{
+		return 1 ;
+	}
 }
 
 #endif

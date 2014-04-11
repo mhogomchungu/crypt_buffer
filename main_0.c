@@ -34,9 +34,11 @@
 #include <string.h>
 #include <stdio.h>
 
-static int _status( crypt_buffer_ctx e,int r )
+static int _status( crypt_buffer_ctx e,int r,char * x,char * y )
 {
 	crypt_buffer_uninit( &e ) ;
+	free( x ) ;
+	free( y ) ;
 	return r ;
 }
 
@@ -51,7 +53,7 @@ int main( int argc,char * argv[] )
 	 * Below two variables hold information about clear text data
 	 */
 	const char * data_to_encrypt = "abc" ;
-	size_t data_to_encrypt_length = strlen( data_to_encrypt ) ;
+	size_t data_to_encrypt_length = strlen( data_to_encrypt ) + 1 ;
 
 	/*
 	 * below two variables hold information about the key to be used for encrypted and decryption
@@ -62,47 +64,55 @@ int main( int argc,char * argv[] )
 	/*
 	 * below two variables hold information about cipher text data
 	 */
-	const char * decrypted_data ;
-	size_t       decrypted_data_size ;
+	char * decrypted_data = NULL ;
+	size_t decrypted_data_size ;
 
 	/*
 	 * below two variables hold information about clear text data converted from cipher text data
 	 */
-	const char * encrypted_data ;
-	size_t       encryped_data_size ;
+	char * encrypted_data = NULL ;
+	size_t encryped_data_size ;
 
 	/*
 	 * we dont need these two arguments
 	 */
 	if( argc && argv ){;}
 
-	if( crypt_buffer_init( &ctx ) == 0 ){
+	if( crypt_buffer_init( &ctx,password,password_length ) == 0 ){
 		puts( "failed to initialize context" ) ;
-		return _status( ctx,1 ) ;
+		return _status( ctx,1,decrypted_data,encrypted_data ) ;
 	}
 
 	/*
 	 * Encrypted a block of data using a given key
 	 */
-	if( crypt_buffer_encrypt( ctx,data_to_encrypt,data_to_encrypt_length,password,password_length,&encrypt_result ) ){
+	if( crypt_buffer_encrypt( ctx,data_to_encrypt,data_to_encrypt_length,&encrypt_result ) ){
 		puts( "data encryption passed" ) ;
-		encrypted_data     = encrypt_result.buffer ;
+		/*
+		 * copy out encrypted data.
+		 */
+		encrypted_data = malloc( encrypt_result.length ) ;
+		memcpy( encrypted_data,encrypt_result.buffer,encrypt_result.length ) ;
 		encryped_data_size = encrypt_result.length ;
 	}else{
 		puts( "data encryption failed" ) ;
-		return _status( ctx,1 ) ;
+		return _status( ctx,1,decrypted_data,encrypted_data ) ;
 	}
 
 	/*
 	 * Given a block of cipher text,decrypt it using a given key
 	 */
-	if( crypt_buffer_decrypt( ctx,encrypted_data,encryped_data_size,password,password_length,&decrypt_result ) ){
+	if( crypt_buffer_decrypt( ctx,encrypted_data,encryped_data_size,&decrypt_result ) ){
 		puts( "data decryption passed" ) ;
-		decrypted_data      = decrypt_result.buffer ;
+		/*
+		 * copy out decrypted data.
+		 */
+		decrypted_data = malloc( decrypt_result.length ) ;
+		memcpy( decrypted_data,decrypt_result.buffer,decrypt_result.length ) ;
 		decrypted_data_size = decrypt_result.length ;
 	}else{
 		puts( "data decryption failed" ) ;
-		return _status( ctx,1 ) ;
+		return _status( ctx,1,decrypted_data,encrypted_data ) ;
 	}
 
 	/*
@@ -111,14 +121,14 @@ int main( int argc,char * argv[] )
 	 */
 	if( strcmp( data_to_encrypt,decrypted_data ) == 0 ){
 		if( data_to_encrypt_length == decrypted_data_size ){
-			puts( "conversion successful" ) ;
-			return _status( ctx,0 ) ;
+			puts( "test passed" ) ;
+			return _status( ctx,0,decrypted_data,encrypted_data ) ;
 		}else{
-			puts( "conversion 1 failed" ) ;
-			return _status( ctx,1 ) ;
+			puts( "test 1 failed" ) ;
+			return _status( ctx,1,decrypted_data,encrypted_data ) ;
 		}
 	}else{
-		puts( "conversion 2 failed" ) ;
-		return _status( ctx,1 ) ;
+		puts( "test 2 failed" ) ;
+		return _status( ctx,1,decrypted_data,encrypted_data ) ;
 	}
 }

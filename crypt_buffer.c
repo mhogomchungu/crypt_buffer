@@ -73,7 +73,9 @@
 struct crypt_buffer_ctx_1
 {
 	char * buffer ;
+	char * key ;
 	size_t buffer_size ;
+	size_t key_size ;
 	gcry_cipher_hd_t h ;
 } ;
 
@@ -87,50 +89,62 @@ static int _passed( gcry_error_t r )
 	return r == GPG_ERR_NO_ERROR ;
 }
 
-int crypt_buffer_init( crypt_buffer_ctx * ctx )
+int crypt_buffer_init( crypt_buffer_ctx * ctx,const void * k,size_t key_size )
 {
 	gcry_error_t r ;
 
 	gcry_cipher_hd_t handle ;
 
-	crypt_buffer_ctx ctx_1 ;
+	crypt_buffer_ctx c ;
+
+	void * key ;
 
 	if( gcry_control( GCRYCTL_INITIALIZATION_FINISHED_P ) != 0 ){
 		gcry_check_version( NULL ) ;
 		gcry_control( GCRYCTL_INITIALIZATION_FINISHED,0 ) ;
 	}
 
+	c = malloc( sizeof( struct crypt_buffer_ctx_1 ) ) ;
+	if( c == NULL ){
+		return 0 ;
+	}
+
+	key = malloc( key_size ) ;
+	if( key == NULL ){
+		free( c ) ;
+		return 0 ;
+	}
+
 	r = gcry_cipher_open( &handle,GCRY_CIPHER_AES256,GCRY_CIPHER_MODE_CBC,0 ) ;
 
 	if( _failed( r ) ){
-		*ctx = NULL ;
+		free( c ) ;
+		free( key ) ;
 		return 0 ;
 	}else{
-		ctx_1 = malloc( sizeof( struct crypt_buffer_ctx_1 ) ) ;
-		if( ctx_1 == NULL ){
-			gcry_cipher_close( handle ) ;
-			*ctx = NULL ;
-			return 0 ;
-		}else{
-			ctx_1->buffer      = NULL ;
-			ctx_1->buffer_size = 0 ;
-			ctx_1->h           = handle ;
-			*ctx               = ctx_1 ;
-			return 1 ;
-		}
+		memcpy( key,k,key_size ) ;
+
+		c->buffer      = NULL ;
+		c->buffer_size = 0 ;
+		c->h           = handle ;
+		c->key         = key ;
+		c->key_size    = key_size ;
+		*ctx           = c ;
+		return 1 ;
 	}
 }
 
 void crypt_buffer_uninit( crypt_buffer_ctx * ctx )
 {
-	crypt_buffer_ctx tx ;
+	crypt_buffer_ctx t ;
 
 	if( ctx != NULL && *ctx != NULL ){
-		tx = *ctx ;
+		t = *ctx ;
 		*ctx = NULL ;
-		gcry_cipher_close( tx->h ) ;
-		free( tx->buffer ) ;
-		free( tx ) ;
+		gcry_cipher_close( t->h ) ;
+		free( t->key ) ;
+		free( t->buffer ) ;
+		free( t ) ;
 	}
 }
 
@@ -153,8 +167,7 @@ static gcry_error_t _create_key( const char * salt,size_t salt_size,const char *
 				salt,salt_size,PBKDF2_ITERATIONS,output_key_size,output_key ) ;
 }
 
-static int _set_gcrypt_handle( crypt_buffer_ctx ctx,const char * password,
-			       size_t passphrase_size,const char * salt,size_t salt_size,const char * iv,size_t iv_size )
+static int _set_gcrypt_handle( crypt_buffer_ctx ctx,const char * salt,size_t salt_size,const char * iv,size_t iv_size )
 {
 	char key[ KEY_LENGTH ] ;
 
@@ -165,7 +178,7 @@ static int _set_gcrypt_handle( crypt_buffer_ctx ctx,const char * password,
 	r = gcry_cipher_reset( handle ) ;
 
 	if( _passed( r ) ){
-		r = _create_key( salt,salt_size,password,passphrase_size,key,KEY_LENGTH ) ;
+		r = _create_key( salt,salt_size,ctx->key,ctx->key_size,key,KEY_LENGTH ) ;
 		if( _passed( r ) ){
 			r = gcry_cipher_setkey( handle,key,KEY_LENGTH ) ;
 			if( _passed( r ) ){
@@ -204,8 +217,7 @@ static char * _expand_buffer( crypt_buffer_ctx h,size_t z )
 	}
 }
 
-int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,
-			  const void * password,size_t passphrase_size,crypt_buffer_result * r )
+int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,crypt_buffer_result * r )
 {
 	char buff[ SALT_SIZE + IV_SIZE ] ;
 
@@ -235,7 +247,7 @@ int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 		return 0 ;
 	}
 
-	if( _set_gcrypt_handle( ctx,password,passphrase_size,salt,SALT_SIZE,iv,IV_SIZE ) ){
+	if( _set_gcrypt_handle( ctx,salt,SALT_SIZE,iv,IV_SIZE ) ){
 
 		len = SALT_SIZE + IV_SIZE ;
 
@@ -297,8 +309,7 @@ static u_int32_t _get_data_length( const char * buffer )
 	return l ;
 }
 
-int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,
-			  const void * password,size_t passphrase_size,crypt_buffer_result * r )
+int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,crypt_buffer_result * r )
 {
 	gcry_error_t z ;
 
@@ -316,7 +327,7 @@ int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 		return 0 ;
 	}
 
-	if( _set_gcrypt_handle( ctx,password,passphrase_size,salt,SALT_SIZE,iv,IV_SIZE ) ){
+	if( _set_gcrypt_handle( ctx,salt,SALT_SIZE,iv,IV_SIZE ) ){
 
 		/*
 		 * Skip to offset 32 and start decryption from there.Thats because the first 32 bytes
