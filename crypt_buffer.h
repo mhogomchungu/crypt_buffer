@@ -148,7 +148,7 @@ int main( int argc,char * argv[] )
 	size_t data_size  = strlen( data ) ;
 
 	/*
-	 * key to be used for encrypted and decryption
+	 * key to be used for encryption and decryption
 	 */
 	const char * key = "xyz" ;
 	size_t key_size = strlen( key ) ;

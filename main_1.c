@@ -99,7 +99,7 @@ int main( int argc,char * argv[] )
 	size_t data_size  = strlen( data ) ;
 
 	/*
-	 * key to be used for encrypted and decryption
+	 * key to be used for encryption and decryption
 	 */
 	const char * key = "xyz" ;
 	size_t key_size = strlen( key ) ;
@@ -115,7 +115,7 @@ int main( int argc,char * argv[] )
 	if( argc && argv ){;}
 
 	_buffer = NULL ;
-	
+
 	if( crypt_buffer_init( &ctx,key,key_size ) ){
 		/*
 		 * This function simulates encrypting data and sending it somewhere
