@@ -109,6 +109,9 @@ void * server( void * e )
 
 	puts( "server started" ) ;
 
+	/*
+	 * reserve port 2000 for this server use.
+	 */
 	SocketBind( s ) ;
 
 	/*
@@ -116,15 +119,18 @@ void * server( void * e )
 	 */
 	sleep( 3 ) ;
 
+	/*
+	 * start waiting for client's connection.
+	 */
 	SocketListen( s ) ;
 
 	/*
-	 * accept network connection
+	 * accept client's connection
 	 */
 	t = SocketAccept( s ) ;
 
 	/*
-	 * read network data
+	 * read network data client sent.
 	 */
 	n = SocketGetData( t,&buffer ) ;
 
