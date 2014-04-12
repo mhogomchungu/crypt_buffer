@@ -6,24 +6,29 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <pthread.h>
 
 #if 0
 to compile this program, build it with the following options:
-gcc -o test crypt_buffer.c socket.c main.c -lpthread -lgcrypt
+gcc -Wall -Wextra -pedantic -o main_2 crypt_buffer.c socket.c main_2.c -lpthread -lgcrypt
 
-and then run it with ./test
+and then run it with ./main_2
 
 expected output:
 
-[ink@mtz zzz]$ gcc -o test crypt_buffer.c socket.c main.c -lpthread -lgcrypt
-[ink@mtz zzz]$ ./test
+[ink@mtz crypt_buffer (master)]$ gcc -Wall -Wextra -pedantic -o main_2 crypt_buffer.c socket.c main_2.c -lpthread -lgcrypt
+[ink@mtz crypt_buffer (master)]$ ./main_2
 server started
+client connecting ...
+client connecting ...
+client connecting ...
 client connecting ...
 client connected
 
 secret message sent and received
 
-[ink@mtz zzz]$
+[ink@mtz crypt_buffer (master)]$
 
 #endif
 
@@ -80,6 +85,8 @@ void * client( void * e )
 	 * close the socket and clean up its resources.
 	 */
 	SocketClose( &s ) ;
+
+	return 0 ;
 }
 
 void * server( void * e )
@@ -103,6 +110,11 @@ void * server( void * e )
 	puts( "server started" ) ;
 
 	SocketBind( s ) ;
+
+	/*
+	 * delay the server to show client's attempts to connect
+	 */
+	sleep( 3 ) ;
 
 	SocketListen( s ) ;
 
