@@ -67,7 +67,7 @@
  *
  * Encrypted data starts at offset 32.
  *
- * Encrypted data will take a minimum of 64 bytes and a maximum of 64 + load size + 31 bytes
+ * The size of ciphertext will be ( 64 + 32n ) bytes where n is a number starting from 0.
  */
 
 struct crypt_buffer_ctx_1
@@ -76,6 +76,7 @@ struct crypt_buffer_ctx_1
 	char * key ;
 	size_t buffer_size ;
 	size_t key_size ;
+	int    fd ;
 	gcry_cipher_hd_t h ;
 } ;
 
@@ -98,6 +99,12 @@ int crypt_buffer_init( crypt_buffer_ctx * ctx,const void * k,size_t key_size )
 	crypt_buffer_ctx c ;
 
 	void * key ;
+
+	int fd = open( "/dev/urandom",O_RDONLY ) ;
+
+	if( fd == -1 ){
+		return 0 ;
+	}
 
 	if( gcry_control( GCRYCTL_INITIALIZATION_FINISHED_P ) != 0 ){
 		gcry_check_version( NULL ) ;
@@ -129,6 +136,7 @@ int crypt_buffer_init( crypt_buffer_ctx * ctx,const void * k,size_t key_size )
 		c->h           = handle ;
 		c->key         = key ;
 		c->key_size    = key_size ;
+		c->fd          = fd ;
 		*ctx           = c ;
 		return 1 ;
 	}
@@ -142,22 +150,18 @@ void crypt_buffer_uninit( crypt_buffer_ctx * ctx )
 		t = *ctx ;
 		*ctx = NULL ;
 		gcry_cipher_close( t->h ) ;
+		close( t->fd ) ;
 		free( t->key ) ;
 		free( t->buffer ) ;
 		free( t ) ;
 	}
 }
 
-static int  _get_random_data( char * buffer,size_t buffer_size )
+static int _get_random_data( crypt_buffer_ctx ctx,char * buffer,size_t buffer_size )
 {
-	int fd = open( "/dev/urandom",O_RDONLY ) ;
-	if( fd != -1 ){
-		read( fd,buffer,buffer_size ) ;
-		close( fd ) ;
-		return 0 ;
-	}else{
-		return 1 ;
-	}
+	ssize_t e = buffer_size ;
+	ssize_t z = read( ctx->fd,buffer,buffer_size ) ;
+	return z != e ;
 }
 
 static gcry_error_t _create_key( const char * salt,size_t salt_size,const char * input_key,
@@ -230,7 +234,7 @@ int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 	const char * salt = buff ;
 	const char * iv   = buff + SALT_SIZE ;
 
-	if( _get_random_data( buff,SALT_SIZE + IV_SIZE ) ){
+	if( _get_random_data( ctx,buff,SALT_SIZE + IV_SIZE ) ){
 		return 0 ;
 	}
 
