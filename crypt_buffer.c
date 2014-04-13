@@ -127,6 +127,7 @@ int crypt_buffer_init( crypt_buffer_ctx * ctx,const void * k,size_t key_size )
 	if( _failed( r ) ){
 		free( c ) ;
 		free( key ) ;
+		close( fd ) ;
 		return 0 ;
 	}else{
 		memcpy( key,k,key_size ) ;
