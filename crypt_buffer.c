@@ -414,6 +414,11 @@ int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 	const char * iv   = buff + SALT_SIZE ;
 
 	size_t len = buffer_size - ( SALT_SIZE + IV_SIZE ) ;
+	ssize_t l  = buffer_size - ( SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ;
+
+	if( l < 0 ){
+		return _debug( ctx,"inconsistent data size detected" ) ;
+	}
 
 	e = _expand_buffer( ctx,buffer_size ) ;
 
