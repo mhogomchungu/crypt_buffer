@@ -83,7 +83,7 @@ struct crypt_buffer_ctx_1
 	gcry_md_hd_t     m ;
 } ;
 
-void _debug_1( crypt_buffer_ctx c )
+static void _debug_1( crypt_buffer_ctx c )
 {
 #if 1
 	c->d = 1 ;
