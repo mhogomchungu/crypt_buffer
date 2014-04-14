@@ -43,6 +43,7 @@
 #define SALT_SIZE  16
 #define IV_SIZE    16
 #define LOAD_INFO_SIZE  32
+#define HMAC_SIZE 24
 #define MAGIC_STRING "TRUE"
 #define MAGIC_STRING_LENGTH 4
 
@@ -55,14 +56,14 @@
  * A user gives a password of specified size and the library coverts it to a 32 byte key using
  * pbkdf2 with iteration count of 5000 and a hash function of sha2.
  *
- * Data is encrypted using CBC mode of 256bit AES.
+ * Data is encrypted using 256 bit AES in CBC mode.
  *
  * The format of the encrypted data:
- * First 16 bytes from offset 0 stores pbkdf2 salt.
- * Second 16 bytes from offset 16 stores AES initialization vector.
- * Third 4 bytes from offset 32 stores the size of the load given by the user.
- * Fourth 4 bytes from offset 36 stores a string "TRUE" that is used to verify encryption key during decryption.
- * 24 bytes from offset 40 are currently unsed.
+ * 16 bytes from offset 0 stores pbkdf2 salt.
+ * 16 bytes from offset 16 stores AES initialization vector.
+ * 4  bytes from offset 32 stores the size of the load given by the user.
+ * 4  bytes from offset 36 stores a string "TRUE" that is used to verify encryption key during decryption.
+ * 24 bytes from offset 40 are used to store hmac hash value of the clear text.
  * The load the user gave to be stored encrypted starts from offset 64.The load will be padded up to a multiple of 32.
  *
  * Encrypted data starts at offset 32.
@@ -77,8 +78,27 @@ struct crypt_buffer_ctx_1
 	size_t buffer_size ;
 	size_t key_size ;
 	int    fd ;
+	int    d ;
 	gcry_cipher_hd_t h ;
+	gcry_md_hd_t     m ;
 } ;
+
+void _debug_1( crypt_buffer_ctx c )
+{
+#if 1
+	c->d = 1 ;
+#else
+	c->d = 0 ;
+#endif
+}
+
+static int _debug( crypt_buffer_ctx ctx,const char * e )
+{
+	if( ctx->d ){
+		puts( e ) ;
+	}
+	return 0 ;
+}
 
 static int _failed( gcry_error_t r )
 {
@@ -90,15 +110,33 @@ static int _passed( gcry_error_t r )
 	return r == GPG_ERR_NO_ERROR ;
 }
 
+static int _failed_init( int fd,char * key,crypt_buffer_ctx c,gcry_cipher_hd_t h,gcry_md_hd_t m )
+{
+	close( fd ) ;
+
+	free( key ) ;
+	free( c ) ;
+
+	if( h != 0 ){
+		gcry_cipher_close( h ) ;
+	}
+	if( m != 0 ){
+		gcry_md_close( m ) ;
+	}
+
+	return 0 ;
+}
+
 int crypt_buffer_init( crypt_buffer_ctx * ctx,const void * k,size_t key_size )
 {
 	gcry_error_t r ;
 
-	gcry_cipher_hd_t handle ;
+	gcry_cipher_hd_t h = 0 ;
+	gcry_md_hd_t m = 0 ;
 
 	crypt_buffer_ctx c ;
 
-	void * key ;
+	void * key = NULL ;
 
 	int fd = open( "/dev/urandom",O_RDONLY ) ;
 
@@ -113,28 +151,38 @@ int crypt_buffer_init( crypt_buffer_ctx * ctx,const void * k,size_t key_size )
 
 	c = malloc( sizeof( struct crypt_buffer_ctx_1 ) ) ;
 	if( c == NULL ){
-		return 0 ;
+		return _failed_init( fd,key,c,h,m ) ;
 	}
 
 	key = malloc( key_size ) ;
 	if( key == NULL ){
-		free( c ) ;
-		return 0 ;
+		return _failed_init( fd,key,c,h,m ) ;
 	}
 
-	r = gcry_cipher_open( &handle,GCRY_CIPHER_AES256,GCRY_CIPHER_MODE_CBC,0 ) ;
+	r = gcry_cipher_open( &h,GCRY_CIPHER_AES256,GCRY_CIPHER_MODE_CBC,0 ) ;
 
 	if( _failed( r ) ){
-		free( c ) ;
-		free( key ) ;
-		close( fd ) ;
-		return 0 ;
+		return _failed_init( fd,key,c,h,m ) ;
+	}
+
+	r = gcry_md_open( &m,GCRY_MD_SHA256,GCRY_MD_FLAG_HMAC ) ;
+
+	if( _failed( r ) ){
+		return _failed_init( fd,key,c,h,m ) ;
+	}
+
+	r = gcry_md_setkey( m,k,key_size ) ;
+
+	if( _failed( r ) ){
+		return _failed_init( fd,key,c,h,m ) ;
 	}else{
 		memcpy( key,k,key_size ) ;
+		_debug_1( c ) ;
 
 		c->buffer      = NULL ;
 		c->buffer_size = 0 ;
-		c->h           = handle ;
+		c->h           = h ;
+		c->m           = m ;
 		c->key         = key ;
 		c->key_size    = key_size ;
 		c->fd          = fd ;
@@ -151,6 +199,7 @@ void crypt_buffer_uninit( crypt_buffer_ctx * ctx )
 		t = *ctx ;
 		*ctx = NULL ;
 		gcry_cipher_close( t->h ) ;
+		gcry_md_close( t->m ) ;
 		close( t->fd ) ;
 		free( t->key ) ;
 		free( t->buffer ) ;
@@ -190,12 +239,18 @@ static int _set_gcrypt_handle( crypt_buffer_ctx ctx,const char * salt,size_t sal
 				r = gcry_cipher_setiv( handle,iv,iv_size ) ;
 				if( _passed( r ) ){
 					return 1 ;
+				}else{
+					return _debug( ctx,"failed to set iv" ) ;
 				}
+			}else{
+				return _debug( ctx,"failed to set key" ) ;
 			}
+		}else{
+			return _debug( ctx,"failed to create key" ) ;
 		}
+	}else{
+		return _debug( ctx,"failed to reset handle" ) ;
 	}
-
-	return 0 ;
 }
 
 static char * _expand_buffer( crypt_buffer_ctx h,size_t z )
@@ -222,6 +277,15 @@ static char * _expand_buffer( crypt_buffer_ctx h,size_t z )
 	}
 }
 
+static unsigned char * _create_hmac( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size )
+{
+	gcry_md_reset( ctx->m ) ;
+
+	gcry_md_write( ctx->m,buffer,buffer_size ) ;
+
+	return gcry_md_read( ctx->m,0 ) ;
+}
+
 int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,crypt_buffer_result * r )
 {
 	char buff[ SALT_SIZE + IV_SIZE ] ;
@@ -232,11 +296,12 @@ int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 	size_t k = buffer_size ;
 
 	char * e ;
+	unsigned char * f ;
 	const char * salt = buff ;
 	const char * iv   = buff + SALT_SIZE ;
 
 	if( _get_random_data( ctx,buff,SALT_SIZE + IV_SIZE ) ){
-		return 0 ;
+		return _debug( ctx,"failed to get random data" ) ;
 	}
 
 	/*
@@ -249,32 +314,43 @@ int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 	e = _expand_buffer( ctx,k + SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ;
 
 	if( e == NULL ){
-		return 0 ;
+		return _debug( ctx,"faile to expand memory buffer" ) ;
+	}
+
+	f = _create_hmac( ctx,buffer,buffer_size ) ;
+
+	if( f == NULL ){
+		return _debug( ctx,"failed to create hmac hash" ) ;
 	}
 
 	if( _set_gcrypt_handle( ctx,salt,SALT_SIZE,iv,IV_SIZE ) ){
 
 		len = SALT_SIZE + IV_SIZE ;
-
 		/*
-		 * The first 32 bytes block of cipher text starts at offset 0.
-		 * First 16 bytes is for pbkdf2 salt.
-		 * Second 16 bytes is for AES initialization vector.
-		 * These informations are stored in clear text but are indistinguishable from cipher text
+		 * 16 bytes from offset 0 contains pbkdf2 salt.
+		 * 16 bytes from offset 16 contains AES initialization vector.
+		 * The sum of the above makes the first 32 byte block.
+		 * This block is stored in clear text.
 		 */
 		memcpy( e,buff,len ) ;
 		/*
-		 * The second 32 bytes block of cipher text starts at offset 32.
-		 * The first 4 bytes at offset 32 stores the size of the clear text we are going to encrypt
+		 * 4 bytes from offset 32 stores the size of the clear text we are going to encrypt
 		 */
 		memcpy( e + len,&buffer_size,sizeof( u_int32_t ) ) ;
 		/*
-		 * The second 4 bytes at offset 36 stores "TRUE" bytes to be used to verify decryption key
-		 * The remaining 24 bytes are currently unused.
+		 * 4 bytes at offset 36 stores "TRUE" bytes to be used to verify decryption key
 		 */
 		memcpy( e + len + sizeof( u_int32_t ),MAGIC_STRING,MAGIC_STRING_LENGTH ) ;
 		/*
-		 * The third block starts at offset 64 and it stores the data content we were asked to encrypt
+		 * 24 bytes from offset 40 contains hmac digest of the cleartext
+		 *
+		 * These 24 bytes plus the 4 above and the 4 above it makes the second 32 byte block.
+		 * Ciphertext starts with this block.
+		 */
+		memcpy( e + len + sizeof( u_int32_t ) + sizeof( u_int32_t ) ,f,HMAC_SIZE ) ;
+		/*
+		 * User data to encrypt starts at the 64th bytes.
+		 * The 64th bytes marks the end of the header and the beginning of the load.
 		 */
 		memcpy( e + len + LOAD_INFO_SIZE,buffer,buffer_size ) ;
 
@@ -292,10 +368,10 @@ int crypt_buffer_encrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 			r->length = k + SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ;
 			return 1 ;
 		}else{
-			return 0 ;
+			return _debug( ctx,"failed to encrypt data" ) ;
 		}
 	}else{
-		return 0 ;
+		return _debug( ctx,"failed to create encryption handle" ) ;
 	}
 }
 
@@ -314,6 +390,19 @@ static u_int32_t _get_data_length( const char * buffer )
 	return l ;
 }
 
+static int _hmac_passed( crypt_buffer_ctx ctx,const char * e,u_int32_t buffer_size )
+{
+	/*
+	 * calculate the hmac hash of the decrypted data.
+	 */
+	unsigned char * f = _create_hmac( ctx,e + LOAD_INFO_SIZE,buffer_size ) ;
+	/*
+	 * compare the hmac of the decrypted data against the stored hmac at offset 8 of the decrypted data.
+	 * This offset 8 is actually offset 40 since the decryption skipped the first 32 bytes of the salt and IV.
+	 */
+	return memcmp( f,e + sizeof( u_int32_t ) + sizeof( u_int32_t ),HMAC_SIZE ) == 0 ;
+}
+
 int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buffer_size,crypt_buffer_result * r )
 {
 	gcry_error_t z ;
@@ -329,7 +418,7 @@ int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 	e = _expand_buffer( ctx,buffer_size ) ;
 
 	if( e == NULL ){
-		return 0 ;
+		return _debug( ctx,"failed to expand internal buffer" ) ;
 	}
 
 	if( _set_gcrypt_handle( ctx,salt,SALT_SIZE,iv,IV_SIZE ) ){
@@ -347,26 +436,26 @@ int crypt_buffer_decrypt( crypt_buffer_ctx ctx,const void * buffer,u_int32_t buf
 				len = _get_data_length( e ) ;
 
 				if( len <= buffer_size - ( SALT_SIZE + IV_SIZE + LOAD_INFO_SIZE ) ){
-					/*
-					 * make sure the stored size is within expected range
-					 */
-					r->buffer = e + LOAD_INFO_SIZE ;
-					r->length = len ;
 
-					return 1 ;
+					if( _hmac_passed( ctx,e,len ) ){
+
+						r->buffer = e + LOAD_INFO_SIZE ;
+						r->length = len ;
+
+						return 1 ;
+					}else{
+						return _debug( ctx,"hmac check failed" ) ;
+					}
 				}else{
-					/*
-					 * something funny is going on,the stored size of data is larger than data itself
-					 */
-					return 0 ;
+					return _debug( ctx,"inconsistency detected on stored data size" ) ;
 				}
 			}else{
-				return 0 ;
+				return _debug( ctx,"password check failed" ) ;
 			}
 		}else{
-			return 0 ;
+			return _debug( ctx,"decryption routine failed 1" ) ;
 		}
 	}else{
-		return 0 ;
+		return _debug( ctx,"decryption routine failed 2" ) ;
 	}
 }
