@@ -144,7 +144,7 @@ int crypt_buffer_init( crypt_buffer_ctx * ctx,const void * k,size_t key_size )
 		return 0 ;
 	}
 
-	if( gcry_control( GCRYCTL_INITIALIZATION_FINISHED_P ) != 0 ){
+	if( gcry_control( GCRYCTL_INITIALIZATION_FINISHED_P ) == 0 ){
 		gcry_check_version( NULL ) ;
 		gcry_control( GCRYCTL_INITIALIZATION_FINISHED,0 ) ;
 	}
