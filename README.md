@@ -1,9 +1,9 @@
 crypt_buffer
 ============
 
-this projects uses libgcrypt to encrypt and decrypt a block of data
+this project uses libgcrypt to encrypt and decrypt a block of data
 
-main_0.c and main_1.c source files contains sample examples on how to use the API
+main_0.c,main_1.c and main_2.c source files contains sample examples on how to use the API
 
 to build these sample programs,run
 
